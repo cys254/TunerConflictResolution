@@ -7,6 +7,8 @@ public class TunerConflictResolver {
     private Booking newBooking;
     private List<ConflictResolutionSet> resolutions;
 
+    private List<BookingTimeInterval> bookingTimeIntervalList;
+
     public TunerConflictResolver(int numberOfTuners, List<Booking> existingBookings, Booking newBooking) {
         this.numberOfTuners = numberOfTuners;
         this.existingBookings = existingBookings;
@@ -36,9 +38,59 @@ public class TunerConflictResolver {
         if (resolutions != null) {
             return hasConflict();
         }
-        // TODO
+        bookingTimeIntervalList = new ArrayList<>();
+        bookingTimeIntervalList.add(new BookingTimeInterval(newBooking.getStartTime(), newBooking.getEndTime()));
+        for (Booking booking : existingBookings) {
+            List<BookingTimeInterval> newIntervals = new ArrayList<>();
+            for (BookingTimeInterval interval : bookingTimeIntervalList) {
+                if (interval.getEnd() <= booking.getStartTime()) {
+                    continue;
+                }
+                if (interval.getBegin() >= booking.getEndTime()) {
+                    break;
+                }
+                newIntervals.addAll(interval.addBookingAndSplitInterval(booking));
+            }
+            bookingTimeIntervalList.addAll(newIntervals);
+            Collections.sort(bookingTimeIntervalList);
+        }
         resolutions = new ArrayList<>();
-        // TODO Detect tuner conflict and generation resolution sets
+        for (int i = 0; i < bookingTimeIntervalList.size(); i++) {
+            BookingTimeInterval interval = bookingTimeIntervalList.get(i);
+            List<Booking> bookings = interval.getBookings();
+            if (bookings.size() < numberOfTuners) {
+                continue;
+            }
+            for (Booking booking: bookings) {
+                ConflictResolutionSet resolution = new ConflictResolutionSet(booking);
+                resolveConflictResolutionSet(resolution, i+1, interval.getBegin(), booking.getEndTime());
+            }
+            break;
+        }
+        Collections.sort(resolutions);
         return hasConflict();
+    }
+
+    private void resolveConflictResolutionSet(ConflictResolutionSet resolution, int i, long prevConflictBegin, long prevBookingEnd) {
+        for (;i<bookingTimeIntervalList.size();i++) {
+            BookingTimeInterval interval = bookingTimeIntervalList.get(i);
+            List<Booking> bookings = interval.getBookings();
+            if (bookings.size() < numberOfTuners) {
+                continue;
+            }
+            if (interval.getEnd() <= prevBookingEnd) {
+                continue;
+            }
+            for (Booking booking: bookings) {
+                if (booking.getStartTime() <= prevConflictBegin) {
+                    continue;
+                }
+                ConflictResolutionSet newResolution = new ConflictResolutionSet(resolution);
+                newResolution.add(booking);
+                resolveConflictResolutionSet(newResolution, i+1, interval.getBegin(), booking.getEndTime());
+            }
+            return;
+        }
+        resolutions.add(resolution);
     }
 }
